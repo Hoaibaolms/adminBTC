@@ -130,6 +130,28 @@
             justify-content: center;
             padding: 24px;
         }
+
+        /* Thêm style cho phân trang */
+        .pagination-btn {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            border: 1px solid #334155;
+            transition: all 0.2s;
+        }
+        .pagination-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .pagination-btn.active {
+            background: #f59e0b;
+            color: white;
+            border-color: #f59e0b;
+        }
     </style>
 </head>
 <body class="p-4">
@@ -316,6 +338,12 @@
                         <tbody id="table-body" class="divide-y divide-slate-800"></tbody>
                     </table>
                 </div>
+                <!-- Phân trang UI -->
+                <div id="pagination-controls" class="p-4 bg-slate-900/50 flex items-center justify-between border-t border-slate-800">
+                    <button onclick="prevPage()" id="prev-btn" class="pagination-btn">TRƯỚC</button>
+                    <div id="page-numbers" class="flex gap-2"></div>
+                    <button onclick="nextPage()" id="next-btn" class="pagination-btn">SAU</button>
+                </div>
             </div>
         </div>
     </div>
@@ -352,6 +380,10 @@
         let historyStack = [];
         const MAX_UNDO = 3;
         let pendingAction = null;
+
+        // Biến phân trang
+        let currentPage = 1;
+        const rowsPerPage = 10;
 
         // --- TÍNH NĂNG TỰ ĐỘNG ---
         function autoCalcPrice(type) {
@@ -562,15 +594,49 @@
 
             saveHistory();
             entries.push(entry);
+            currentPage = 1; // Quay về trang 1 khi thêm mới
             updateUI(); syncToDrive();
             showToast("Đã lưu dữ liệu", "success");
+        }
+
+        // Các hàm điều khiển phân trang
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                updateUI();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(entries.length / rowsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                updateUI();
+            }
+        }
+
+        function goToPage(p) {
+            currentPage = p;
+            updateUI();
         }
 
         function updateUI() {
             const tbody = document.getElementById('table-body');
             if (!tbody) return;
             tbody.innerHTML = '';
-            [...entries].sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(e => {
+
+            const sortedEntries = [...entries].sort((a,b) => new Date(b.date) - new Date(a.date));
+            const totalPages = Math.ceil(sortedEntries.length / rowsPerPage);
+            
+            // Cập nhật trang hiện tại nếu xóa hết dữ liệu ở trang đó
+            if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+            if (totalPages === 0) currentPage = 1;
+
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const paginatedItems = sortedEntries.slice(start, end);
+
+            paginatedItems.forEach(e => {
                 let col1 = '-', col2 = '-', colorClass = 'text-slate-400';
                 const type = (e.type || "").toLowerCase().trim();
                 if (type === 'buy') { colorClass = 'text-green-400'; col1 = '+' + (e.amount || 0).toFixed(8); col2 = '$' + (e.price || 0).toLocaleString(); }
@@ -589,6 +655,25 @@
                     </tr>
                 `;
             });
+
+            // Cập nhật Nút Phân Trang
+            document.getElementById('prev-btn').disabled = currentPage === 1;
+            document.getElementById('next-btn').disabled = currentPage === totalPages || totalPages === 0;
+
+            const pageNumbers = document.getElementById('page-numbers');
+            pageNumbers.innerHTML = '';
+            
+            // Hiển thị tối đa 3 nút trang gần nhất
+            let startPage = Math.max(1, currentPage - 1);
+            let endPage = Math.min(totalPages, startPage + 2);
+            if (endPage - startPage < 2) startPage = Math.max(1, endPage - 2);
+
+            for (let i = startPage; i <= endPage; i++) {
+                pageNumbers.innerHTML += `
+                    <button onclick="goToPage(${i})" class="pagination-btn ${i === currentPage ? 'active' : ''}">${i}</button>
+                `;
+            }
+
             updateUndoButton();
         }
 
